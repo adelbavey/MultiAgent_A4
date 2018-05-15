@@ -69,14 +69,13 @@ for i_episode in range(20):
 		actions.append(action)
 		rewards.append(reward)
 
-		print(env.action_space, env.observation_space)
+		#print(env.action_space, env.observation_space)
 		print(action,reward)
 
 		prev_x = cur_x
 		if done:
 			print("Episode finished after {} timesteps".format(t+1))
 			break
-
 
 	rewards = discount_rewards(rewards)
 	#rewards -= np.mean(rewards)
