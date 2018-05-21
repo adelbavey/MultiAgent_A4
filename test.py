@@ -1,6 +1,7 @@
 import gym
 import time
 #import theano
+import keras
 from keras.models import Sequential
 from keras.layers import Dense
 #import tensorflow
@@ -31,17 +32,18 @@ def discount_rewards(r):
 
 
 model = Sequential()
-model.add(Dense(units=200, activation='relu', input_shape=(6400,)))
-model.add(Dense(units=2, activation='softmax'))
+model.add(Dense(units=200, activation='relu', input_shape=(1,6400)))
+model.add(Dense(units=3, activation='softmax'))
 model.compile(loss='categorical_crossentropy',
               optimizer='sgd',
               metrics=['accuracy'])
 
-env = gym.make('Pong-v0')
-for i_episode in range(20):
+env = gym.make('SpaceInvaders-v0')
+for i_episode in range(2000):
 	observation = env.reset()
 	frames = []
 	rewards = []
+	predProbs = []
 	action = env.action_space.sample()
 	actions = []
 	prev_x = 0
@@ -59,15 +61,19 @@ for i_episode in range(20):
 		diff_x = cur_x-cur_x if t==0 else cur_x-prev_x
 
 		#Get output from network, and sample from distribution
-		classes = model.predict(x=np.matrix(diff_x), batch_size=1)
+		classes = model.predict(x=np.array([np.matrix(diff_x)]), batch_size=1)
 		print(classes)
-		action = 2 if classes[0][0]>random.random() else 3
+		action = np.random.choice([1,2,3],1,p=classes[0][0])
+		#action = np.argmax(classes)+1
+		#action = 2 if classes[0][0][0]> random.random() else 3
 
 
 		#Build dataset for training
-		frames.append(diff_x)
+		frames.append(np.matrix(diff_x))
 		actions.append(action)
 		rewards.append(reward)
+		y = keras.utils.to_categorical(action-1, num_classes=3)
+		predProbs.append(y)
 
 		#print(env.action_space, env.observation_space)
 		print(action,reward)
@@ -78,28 +84,43 @@ for i_episode in range(20):
 			break
 
 	rewards = discount_rewards(rewards)
-	#rewards -= np.mean(rewards)
-	#rewards /= np.std(rewards)
+	rewards -= np.mean(rewards)
+	rewards /= np.std(rewards)
+
+
 
 	#Build labels. Encourage positive actions, discourage negative.
 	labels = []
 	for i in range(len(rewards)):
+
+		labels.append(np.matrix(predProbs[i]*rewards[i]))
+
+
+		'''
 		if rewards[i]<0:
 			#opposite_action = 1 if actions[i] == 2 else 0
 			label = [0,0]
-			label[(actions[i]+1)%2] = -rewards[i]
-			label[actions[i]%2] = 1+rewards[i]
+			label[(actions[i])%2] = -rewards[i]
+			label[(actions[i]+1)%2] = 1+rewards[i]
 			labels.append(label)
-		else:
+		elif rewards[i]>0:
 			#positive_action = 0 if actions[i] == 2 else 1
 			label = [0,0]
-			label[actions[i]%2] = rewards[i]
-			label[(actions[i]+1)%2] = 1-rewards[i]
+			label[(actions[i]+1)%2] = rewards[i]
+			label[(actions[i])%2] = 1-rewards[i]
 			labels.append(label)
+		else:
+			label = [0.5,0.5]
+			labels.append(label)
+		'''
+		
+
 
 	#Train
-	for i in range(len(frames)):
-		model.train_on_batch(np.matrix(frames[i]), np.matrix(labels[i]))
+	#print(len(labels))
+	#print(len(frames))
+	#for i in range(len(frames)):
+	model.train_on_batch(np.array(frames), np.array(labels))
 
 
 
