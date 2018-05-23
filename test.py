@@ -3,7 +3,8 @@ import time
 #import theano
 import keras
 from keras.models import Sequential
-from keras.layers import Dense
+from keras.layers import Dense,Dropout
+from keras.optimizers import SGD
 #import tensorflow
 import numpy as np
 import random
@@ -24,56 +25,74 @@ def discount_rewards(r):
   running_add = 0
   for t in reversed(range(0, len(r))):
     if r[t] != 0: running_add = 0 # reset the sum, since this was a game boundary (pong specific!)
-    running_add = running_add * 0.99 + r[t]
+    running_add = running_add * 0.95 + r[t]
     discounted_r[t] = running_add
   return discounted_r
+
+def softmax(x):
+    """Compute softmax values for each sets of scores in x."""
+    e_x = np.exp(x - np.max(x))
+    return e_x / e_x.sum(axis=1)
 
 ###
 
 
 model = Sequential()
-model.add(Dense(units=200, activation='relu', input_shape=(1,6400)))
-model.add(Dense(units=3, activation='softmax'))
+sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
+model.add(Dense(units=256, activation='relu',kernel_initializer='random_uniform', input_shape=(1,6400)))
+#model.add(Dropout(0.5))
+#model.add(Dense(units=200, activation='relu'))
+#model.add(Dense(units=10, activation='relu'))
+model.add(Dense(units=2, activation='softmax', kernel_initializer='random_uniform'))
 model.compile(loss='categorical_crossentropy',
-              optimizer='sgd',
+              optimizer='rmsprop',
               metrics=['accuracy'])
 
-env = gym.make('SpaceInvaders-v0')
-for i_episode in range(2000):
+
+env = gym.make('Pong-v0')
+frames = []
+rewards = []
+predProbs = []
+actions = []
+
+for i_episode in range(1,2000):
 	observation = env.reset()
-	frames = []
-	rewards = []
-	predProbs = []
-	action = env.action_space.sample()
-	actions = []
 	prev_x = 0
-	for t in range(1000):
+	action = env.action_space.sample()
+	for t in range(10000):
 		#time.sleep(0.1)
 		env.render()
-		#print(observation)
-		
-		observation, reward, done, info = env.step(action)
 
 		#Reduce dimensionality
 		cur_x = prepro(observation)
 
 		#Get difference framce
-		diff_x = cur_x-cur_x if t==0 else cur_x-prev_x
+		diff_x = cur_x-cur_x if t==0 else (cur_x-prev_x)
+		frames.append(np.matrix(diff_x))
 
 		#Get output from network, and sample from distribution
 		classes = model.predict(x=np.array([np.matrix(diff_x)]), batch_size=1)
 		print(classes)
-		action = np.random.choice([1,2,3],1,p=classes[0][0])
+		#action = np.random.choice([2,3],1,p=classes[0][0])
+		action = np.argmax(classes)+2 if random.random() < 0.5 else np.random.choice([2,3],1,p=classes[0][0])
+		y = keras.utils.to_categorical(action-2, num_classes=2)
+		predProbs.append(y)
+
+		#print(observation)
+		actions.append(action)
+		observation, reward, done, info = env.step(action)
+		rewards.append(reward)
+		
+		
 		#action = np.argmax(classes)+1
 		#action = 2 if classes[0][0][0]> random.random() else 3
 
 
 		#Build dataset for training
-		frames.append(np.matrix(diff_x))
-		actions.append(action)
-		rewards.append(reward)
-		y = keras.utils.to_categorical(action-1, num_classes=3)
-		predProbs.append(y)
+		
+		
+		
+		
 
 		#print(env.action_space, env.observation_space)
 		print(action,reward)
@@ -83,17 +102,12 @@ for i_episode in range(2000):
 			print("Episode finished after {} timesteps".format(t+1))
 			break
 
-	rewards = discount_rewards(rewards)
-	rewards -= np.mean(rewards)
-	rewards /= np.std(rewards)
+	
 
 
 
 	#Build labels. Encourage positive actions, discourage negative.
-	labels = []
-	for i in range(len(rewards)):
-
-		labels.append(np.matrix(predProbs[i]*rewards[i]))
+	
 
 
 		'''
@@ -120,7 +134,28 @@ for i_episode in range(2000):
 	#print(len(labels))
 	#print(len(frames))
 	#for i in range(len(frames)):
-	model.train_on_batch(np.array(frames), np.array(labels))
+	if i_episode %50 ==0:
+		d_rewards = discount_rewards(rewards)
+		#print(d_rewards)
+		#d_rewards -= np.mean(d_rewards)
+		#d_rewards /= np.std(d_rewards)
+		#print (d_rewards)
+
+		labels = []
+		for i in range(len(d_rewards)):
+			best_action = np.argmax(softmax(np.matrix(predProbs[i]*d_rewards[i])))
+			best_action = keras.utils.to_categorical(best_action, num_classes=2)
+
+			labels.append([best_action])
+			#print(softmax(np.matrix(predProbs[i]*d_rewards[i])))
+			#print(labels[i])
+		
+		model.train_on_batch(np.array(frames), np.array(labels))
+		frames = []
+		rewards = []
+		predProbs = []
+		actions = []
+		
 
 
 
