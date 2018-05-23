@@ -227,8 +227,6 @@ time_s = time.time()
 while True:
   if render: env.render()
 
-  time.sleep(0.05)
-
   # preprocess the observation, set input to network to be difference image
   # cur_x = prepro(observation)
   # x = cur_x - prev_x if prev_x is not None else np.zeros(D)
@@ -238,10 +236,10 @@ while True:
   x = []
   for i in range(5):
     state_vec_normalized = list(state_vec[i])
-    if state_vec_normalized[0] != 0: state_vec_normalized[0] = (state_vec_normalized[0] - 114) / 100.0
-    if state_vec_normalized[1] != 0: state_vec_normalized[1] = (state_vec_normalized[1] - 80) / 100.0
-    if state_vec_normalized[2] != 0: state_vec_normalized[2] = (state_vec_normalized[2] - 114) / 100.0
-    if state_vec_normalized[3] != 0: state_vec_normalized[3] = (state_vec_normalized[3] - 114) / 100.0
+    if state_vec_normalized[0] != 0: state_vec_normalized[0] = (state_vec_normalized[0] - 114) / 40.0
+    if state_vec_normalized[1] != 0: state_vec_normalized[1] = (state_vec_normalized[1] - 80) / 40.0
+    if state_vec_normalized[2] != 0: state_vec_normalized[2] = (state_vec_normalized[2] - 114) / 40.0
+    if state_vec_normalized[3] != 0: state_vec_normalized[3] = (state_vec_normalized[3] - 114) / 40.0
 
     for j in range(len(state_vec_normalized)):
         x.append(state_vec_normalized[j])
@@ -299,7 +297,7 @@ while True:
     # boring book-keeping
     running_reward = reward_sum if running_reward is None else running_reward * 0.99 + reward_sum * 0.01
     print 'resetting env. episode reward total was %f. running mean: %f' % (reward_sum, running_reward)
-    if episode_number % 100 == 0:
+    if episode_number % 500 == 0:
         file_name = "scenario_2_episode_" + str(episode_number)
         pickle.dump(model, open(file_name, 'wb'))
     reward_sum = 0

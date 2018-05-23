@@ -3,7 +3,7 @@ import numpy as np
 import cPickle as pickle
 import gym
 
-from matplotlib import pyplot as plt
+#from matplotlib import pyplot as plt
 
 from sklearn.neural_network import MLPRegressor
 
@@ -21,10 +21,10 @@ def prepro(I):
   #return I
 
 def sigmoid(x):
-  return 1.0 / (1.0 + np.exp(-x)) # sigmoid "squashing" function to interval [0,1]
+  return 1.0 / (1.0 + np.exp(-x*5)) # sigmoid "squashing" function to interval [0,1]
 
 def taper_rewards(r):
-    gamma = 0.99  # discount factor for reward
+    gamma = 0.9  # discount factor for reward
     """ take 1D float array of rewards and compute discounted reward """
     tapered_rewards = [0] * len(r)
     running_add = 0
@@ -83,9 +83,9 @@ def main_function():
     if resume:
         clf = pickle.load(open('scenario_5_episode_8000', 'rb'))
     else:
-        clf = MLPRegressor(solver='sgd', batch_size=10, max_iter=1, verbose=True, warm_start=True, hidden_layer_sizes=(10,))
+        clf = MLPRegressor(solver='sgd', batch_size=10, max_iter=1, verbose=True, warm_start=True, hidden_layer_sizes=(200,))
 
-    env = gym.make("SpaceInvaders-v0")
+    env = gym.make("SpaceInvaders-v4")
     observation = env.reset()
     x_vector = []
     reward_vector = []
@@ -93,7 +93,7 @@ def main_function():
     episode_number = 0
     prev_x = None # used in computing the difference frame
     D = 160 * 160 # input dimensionality: 80x80 grid
-    render = True
+    render = False
 
     time_s = time.time()
 
@@ -120,6 +120,8 @@ def main_function():
             predict_probabilities = [0.33,0.33,0.33]
         else:
             predict = clf.predict(x.reshape(1,-1))[0]
+            predict -= np.mean(predict)
+
             predict_squashed = sigmoid(predict)
 
             predict_sum = sum(predict_squashed)
@@ -157,6 +159,9 @@ def main_function():
             # standardize the rewards to be unit normal (helps control the gradient estimator variance)
             #discounted_epr -= np.mean(discounted_epr)
             #discounted_epr /= np.std(discounted_epr)
+
+            tapered_reward_vector -= np.mean(tapered_reward_vector)
+            tapered_reward_vector /= np.std(tapered_reward_vector)
 
             #epdlogp *= discounted_epr  # modulate the gradient with advantage (PG magic happens right here.)
             action_labels = []

@@ -160,7 +160,7 @@ def is_ball(color):
     return False
 
 def sigmoid(x):
-  return 1.0 / (1.0 + np.exp(-x)) # sigmoid "squashing" function to interval [0,1]
+  return 1.0 / (1.0 + np.exp(-x*3)) # sigmoid "squashing" function to interval [0,1]
 
 def taper_rewards(r):
     gamma = 0.99  # discount factor for reward
@@ -202,141 +202,175 @@ def taper_rewards(r):
 # grad_buffer = { k : np.zeros_like(v) for k,v in model.iteritems() } # update buffers that add up gradients over a batch
 # rmsprop_cache = { k : np.zeros_like(v) for k,v in model.iteritems() } # rmsprop memory
 
-resume = False
-
-if resume:
-    clf = pickle.load(open('scenario_4_episode_8000', 'rb'))
-else:
-    clf = MLPRegressor(solver='sgd', batch_size=10, max_iter=1, verbose=True, warm_start=True, hidden_layer_sizes=(10,))
-
-env = gym.make("Pong-v0")
-observation = env.reset()
-x_vector = []
-reward_vector = []
-action_vector = []
-episode_number = 0
-render = False
-
-
-state_vec = []
-time_s = time.time()
-
-while True:
-    if render: env.render()
-
-    # preprocess the observation, set input to network to be difference image
-    # cur_x = prepro(observation)
-    # x = cur_x - prev_x if prev_x is not None else np.zeros(D)
-    # prev_x = cur_x
-
-    state_vec = get_4_dim_state_vector(observation, state_vec)
-    x = []
-    for i in range(5):
-        state_vec_normalized = list(state_vec[i])
-        if state_vec_normalized[0] != 0: state_vec_normalized[0] = (state_vec_normalized[0] - 114) / 100.0
-        if state_vec_normalized[1] != 0: state_vec_normalized[1] = (state_vec_normalized[1] - 80) / 100.0
-        if state_vec_normalized[2] != 0: state_vec_normalized[2] = (state_vec_normalized[2] - 114) / 100.0
-        if state_vec_normalized[3] != 0: state_vec_normalized[3] = (state_vec_normalized[3] - 114) / 100.0
-
-        for j in range(len(state_vec_normalized)):
-            x.append(state_vec_normalized[j])
-
-    x = np.array(x)
-
-    var = np.var(x)
-    avg = np.mean(x)
-    #print var, avg
-
-    # forward the policy network and sample an action from the returned probability
-    # aprob, h = policy_forward(x)
-    # action = 2 if np.random.uniform() < aprob else 3 # roll the dice!
+def get_preferred_action(probabilities):
+    cumulative_probabilities = []
+    cumulative_probabilities.append(probabilities[0])
+    for i in range(1,len(probabilities)):
+        cumulative_probabilities.append(probabilities[i] + cumulative_probabilities[i-1])
 
     r = np.random.uniform()
-    if episode_number == 0:
-        if r < 0.5:
-            action = 2
-        else:
-            action = 3
+    action = 0
+    for i in range(0, len(probabilities)):
+        if r < cumulative_probabilities[i]:
+            action = i
+            break
+
+    return action
+
+
+def main_function():
+    resume = False
+
+    if resume:
+        clf = pickle.load(open('scenario_4_episode_8000', 'rb'))
     else:
-        predict = clf.predict(x.reshape(1,-1))[0]
-        predict_squashed = sigmoid(predict)
+        clf = MLPRegressor(solver='sgd', batch_size=10, max_iter=1, verbose=True, warm_start=True, hidden_layer_sizes=(10,))
 
-        predict_sum = sum(predict_squashed)
-        predict_probabilities = [0,0]
-        predict_probabilities[0] = predict_squashed[0] / predict_sum
-        predict_probabilities[1] = predict_squashed[1] / predict_sum
-        if r < predict_probabilities[0]:
-            action = 2
+    env = gym.make("Pong-v0")
+    observation = env.reset()
+    x_vector = []
+    reward_vector = []
+    action_vector = []
+    episode_number = 0
+    render = False
+
+
+    state_vec = []
+    time_s = time.time()
+
+    while True:
+        if render: env.render()
+
+        # preprocess the observation, set input to network to be difference image
+        # cur_x = prepro(observation)
+        # x = cur_x - prev_x if prev_x is not None else np.zeros(D)
+        # prev_x = cur_x
+
+        state_vec = get_4_dim_state_vector(observation, state_vec)
+        x = []
+        for i in range(5):
+            state_vec_normalized = list(state_vec[i])
+            if state_vec_normalized[0] != 0: state_vec_normalized[0] = (state_vec_normalized[0] - 114) / 40.0
+            if state_vec_normalized[1] != 0: state_vec_normalized[1] = (state_vec_normalized[1] - 80) / 40.0
+            if state_vec_normalized[2] != 0: state_vec_normalized[2] = (state_vec_normalized[2] - 114) / 40.0
+            if state_vec_normalized[3] != 0: state_vec_normalized[3] = (state_vec_normalized[3] - 114) / 40.0
+
+            for j in range(len(state_vec_normalized)):
+                x.append(state_vec_normalized[j])
+
+        x = np.array(x)
+
+        var = np.var(x)
+        avg = np.mean(x)
+        #print var, avg
+
+        # forward the policy network and sample an action from the returned probability
+        # aprob, h = policy_forward(x)
+        # action = 2 if np.random.uniform() < aprob else 3 # roll the dice!
+
+        # r = np.random.uniform()
+        # if episode_number == 0:
+        #     if r < 0.5:
+        #         action = 2
+        #     else:
+        #         action = 3
+        # else:
+        #     predict = clf.predict(x.reshape(1,-1))[0]
+        #     predict_squashed = sigmoid(predict)
+        #
+        #     predict_sum = sum(predict_squashed)
+        #     predict_probabilities = [0,0]
+        #     predict_probabilities[0] = predict_squashed[0] / predict_sum
+        #     predict_probabilities[1] = predict_squashed[1] / predict_sum
+        #     if r < predict_probabilities[0]:
+        #         action = 2
+        #     else:
+        #         action = 3
+
+        if episode_number == 0:
+            predict_probabilities = [0.5,0.5]
         else:
-            action = 3
+            predict = clf.predict(x.reshape(1,-1))[0]
+            #m = np.mean(predict)
+            predict -= np.mean(predict)
 
-    # record various intermediates (needed later for backprop)
-    x_vector.append(x)  # observation
-    action_vector.append(action)
+            predict_squashed = sigmoid(predict)
 
-    # step the environment and get new measurements
-    observation, reward, done, info = env.step(action)
+            predict_sum = sum(predict_squashed)
+            predict_probabilities = [0,0]
+            predict_probabilities[0] = predict_squashed[0] / predict_sum
+            predict_probabilities[1] = predict_squashed[1] / predict_sum
 
-    # drs.append(reward) # record reward (has to be done after we call step() to get reward for previous action)
-    reward_vector.append(reward)
+        action = get_preferred_action(predict_probabilities)
 
-    if done:  # an episode finished
-        episode_number += 1
+        action += 2
 
-        # stack together all inputs, hidden states, action gradients, and rewards for this episode
-        # epx = np.vstack(xs)
-        # epdlogp = np.vstack(dlogps)
-        # epr = np.vstack(drs)
+        # record various intermediates (needed later for backprop)
+        x_vector.append(x)  # observation
+        action_vector.append(action)
 
-        #xs, hs, dlogps, drs = [], [], [], []  # reset array memory
+        # step the environment and get new measurements
+        observation, reward, done, info = env.step(action)
 
-        # compute the discounted reward backwards through time
-        tapered_reward_vector = taper_rewards(reward_vector)
-        # standardize the rewards to be unit normal (helps control the gradient estimator variance)
-        #discounted_epr -= np.mean(discounted_epr)
-        #discounted_epr /= np.std(discounted_epr)
+        # drs.append(reward) # record reward (has to be done after we call step() to get reward for previous action)
+        reward_vector.append(reward)
 
-        #epdlogp *= discounted_epr  # modulate the gradient with advantage (PG magic happens right here.)
-        action_labels = []
-        for i in range(len(action_vector)):
-            action = action_vector[i]
+        if done:  # an episode finished
+            episode_number += 1
 
-            if action == 2:
-                action_index = 0
-                other_action_index = 1
-            else:
-                action_index = 1
-                other_action_index = 0
+            # stack together all inputs, hidden states, action gradients, and rewards for this episode
+            # epx = np.vstack(xs)
+            # epdlogp = np.vstack(dlogps)
+            # epr = np.vstack(drs)
 
-            action_label = [0,0]
-            action_label[action_index] = tapered_reward_vector[i]
-            action_label[other_action_index] = -tapered_reward_vector[i]
+            #xs, hs, dlogps, drs = [], [], [], []  # reset array memory
 
-            action_labels.append(action_label)
+            # compute the discounted reward backwards through time
+            tapered_reward_vector = taper_rewards(reward_vector)
+            # standardize the rewards to be unit normal (helps control the gradient estimator variance)
+            #discounted_epr -= np.mean(discounted_epr)
+            #discounted_epr /= np.std(discounted_epr)
 
-        x_vector = np.vstack(x_vector)
-        action_labels = np.vstack(action_labels)
+            tapered_reward_vector -= np.mean(tapered_reward_vector)
+            tapered_reward_vector /= np.std(tapered_reward_vector)
 
-        clf.fit(x_vector,action_labels)
+            #epdlogp *= discounted_epr  # modulate the gradient with advantage (PG magic happens right here.)
+            action_labels = []
+            for i in range(len(action_vector)):
+                action = action_vector[i]
 
-        x_vector = []
-        reward_vector = []
-        action_vector = []
+                action_index = action - 2
 
-        # boring book-keeping
-        #running_reward = reward_sum if running_reward is None else running_reward * 0.99 + reward_sum * 0.01
-        #print 'resetting env. episode reward total was %f. running mean: %f' % (reward_sum, running_reward)
-        if episode_number % 100 == 0:
-            file_name = "scenario_4_episode_" + str(episode_number)
-            pickle.dump(clf, open(file_name, 'wb'))
-        #reward_sum = 0
-        observation = env.reset()  # reset env
-        #prev_x = None
+                action_label = [0,0]
+                action_label[action_index] = tapered_reward_vector[i]
+                #action_label[other_action_index] = -tapered_reward_vector[i]
 
-        print "Episode time: " + str(time.time() - time_s)
-        time_s = time.time()
+                action_labels.append(action_label)
 
-    if reward != 0:  # Pong has either +1 or -1 reward exactly when game ends.
-        print ('ep %d: game finished, reward: %f' % (episode_number, reward)) + ('' if reward == -1 else ' !!!!!!!!')
+            x_vector = np.vstack(x_vector)
+            action_labels = np.vstack(action_labels)
+
+            clf.fit(x_vector,action_labels)
+
+            x_vector = []
+            reward_vector = []
+            action_vector = []
+
+            # boring book-keeping
+            #running_reward = reward_sum if running_reward is None else running_reward * 0.99 + reward_sum * 0.01
+            #print 'resetting env. episode reward total was %f. running mean: %f' % (reward_sum, running_reward)
+            if episode_number % 500 == 0:
+                file_name = "scenario_4_episode_" + str(episode_number)
+                pickle.dump(clf, open(file_name, 'wb'))
+            #reward_sum = 0
+            observation = env.reset()  # reset env
+            #prev_x = None
+
+            print "Episode time: " + str(time.time() - time_s)
+            time_s = time.time()
+
+        if reward != 0:  # Pong has either +1 or -1 reward exactly when game ends.
+            print ('ep %d: game finished, reward: %f' % (episode_number, reward)) + ('' if reward == -1 else ' !!!!!!!!')
 
 
+main_function()
